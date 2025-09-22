@@ -132,9 +132,9 @@ st.plotly_chart(fig_ts, use_container_width=True)
 
 #Explanation
 st.markdown("---")
-st.subheader("Story")
+st.subheader("Demo Insights and Implications")
 
-# PPossible pull dynamic figures already calculated above
+# Possible pull dynamic figures already calculated above
 try:
     focus_rank = int(row.name) + 1            
     focus_rate = float(row["rate"])
