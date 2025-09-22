@@ -7,7 +7,7 @@ import plotly.express as px
 st.set_page_config(page_title="Camden TA Insights", layout="wide")
 st.title("Camden Temporary Accommodation – Interactive Insights")
 
-# ---------- Load data ----------
+#Load Data
 DATA_DIR = Path(__file__).parent / "data"
 
 @st.cache_data
@@ -61,7 +61,7 @@ def load_london_timeseries(path: Path):
     tidy["period"] = tidy.apply(lambda r: f"{int(r['year'])} Q{int(r['quarter'])}" if pd.notna(r['quarter']) else str(int(r['year'])), axis=1)
     return tidy
 
-# Graceful error if files missing
+# Graceful error if file missing
 missing = []
 bpath = DATA_DIR / "borough_ta_2024.csv"
 tpath = DATA_DIR / "london_ta_types_2002_2025Q1.csv"
@@ -74,7 +74,7 @@ if missing:
 borough_df = load_borough_snapshot(bpath)
 ts_tidy = load_london_timeseries(tpath)
 
-# ---------- Sidebar ----------
+#Sidebar Filters
 st.sidebar.header("Filters")
 boroughs = sorted(borough_df["borough"].unique())
 focus_borough = st.sidebar.selectbox("Focus borough", options=boroughs,
@@ -87,7 +87,7 @@ types = sorted(ts_tidy["type"].unique())
 selected_types = st.sidebar.multiselect("Accommodation types", options=types, default=types[:3])
 stacked = st.sidebar.checkbox("Show stacked area", value=True)
 
-# ---------- KPIs ----------
+#KPIs
 ranked = borough_df.sort_values("rate", ascending=False).reset_index(drop=True)
 if focus_borough not in ranked["borough"].values:
     st.warning(f"{focus_borough} not in snapshot file.")
@@ -103,7 +103,7 @@ else:
 st.caption("Source: DLUHC statutory homelessness tables; London Datastore extracts.")
 st.markdown("---")
 
-# ---------- Chart 1: Borough ranking ----------
+#Chart 1: Borough ranking
 st.subheader("Borough snapshot – latest rate of households in temporary accommodation")
 rank_plot_df = ranked.copy()
 rank_plot_df["highlight"] = rank_plot_df["borough"].eq(focus_borough).map({True: focus_borough, False: "Other boroughs"})
@@ -118,7 +118,7 @@ st.plotly_chart(fig_rank, use_container_width=True)
 
 st.markdown("---")
 
-# ---------- Chart 2: Time series ----------
+#Chart 2: Time series
 st.subheader("Temporary accommodation over time – London totals by accommodation type")
 mask = (ts_tidy["year"].between(year_range[0], year_range[1])) & (ts_tidy["type"].isin(selected_types))
 ts_filtered = ts_tidy[mask].sort_values(["year","quarter"]).assign(x=lambda d: d["period"])
@@ -130,9 +130,106 @@ else:
 fig_ts.update_layout(height=520, legend_title=None, margin=dict(l=10, r=10, t=30, b=10), xaxis_tickangle=-30)
 st.plotly_chart(fig_ts, use_container_width=True)
 
-with st.expander("About this demo"):
+#Explanation
+st.markdown("---")
+st.subheader("Story")
+
+# PPossible pull dynamic figures already calculated above
+try:
+    focus_rank = int(row.name) + 1            
+    focus_rate = float(row["rate"])
+    london_avg = float(london_avg)
+    vs_london_pct = ((focus_rate - london_avg) / london_avg) * 100 if london_avg else None
+except Exception:
+    focus_rank = None
+    focus_rate = None
+    vs_london_pct = None
+
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Why the trend matters",
+    "Camden vs London",
+    "Implications for services",
+    "Possible AI/LLM applications"
+])
+
+with tab1:
+    st.markdown(f"""
+**Why this trend matters**
+
+- **Budget pressure**: Temporary Accommodation (TA) is one of the fastest-growing cost lines for London boroughs. Even small % changes translate into **material £ impacts** across a year.
+- **Family stability**: Rising TA correlates with increased placements for **households with children**, affecting schooling continuity and wellbeing.
+- **System flow**: TA is a bottleneck indicator — it reflects earlier upstream issues (evictions, affordability) and downstream capacity (move-on options). Tracking it helps **prioritise the right levers**.
+- **Operational planning**: Understanding the **timing** (which quarters/years spike) supports staff rostering, procurement cycles, and early communication with providers.
+""")
+
+with tab2:
+    # Data Awareness
+    bullets = []
+    if focus_rank is not None:
+        bullets.append(f"- **Rank**: {focus_borough} is currently **{focus_rank}** out of {len(ranked)} London boroughs (1 = highest TA rate).")
+    if focus_rate is not None:
+        bullets.append(f"- **Current rate**: {focus_rate:,.2f} households in TA **per 1,000 households** in {focus_borough}.")
+    if vs_london_pct is not None:
+        sign = "above" if vs_london_pct >= 0 else "below"
+        bullets.append(f"- **Vs London average**: **{abs(vs_london_pct):.1f}% {sign}** the London mean.")
+    if not bullets:
+        bullets.append("- **Camden vs London** comparison available when data loads (see KPIs above).")
+
+    st.markdown("**Where Camden sits vs London**")
+    st.markdown("\n".join(bullets))
     st.markdown("""
-- **Goal**: demonstrate analysis, coding and storytelling on a Camden-relevant topic.
-- Sidebar lets you explore periods and accommodation types; Camden is highlighted in the ranking.
-- Built with **Python, pandas, Plotly, Streamlit**.
+**What to watch in the chart**
+- Are spikes concentrated in particular **quarters** (e.g., Q4/Q1)?  
+- Which **accommodation types** (e.g., nightly-paid, PSL, B&B) are driving increases?  
+- Does the profile suggest **procurement** challenges (e.g., more nightly-paid) or **case complexity** (longer stays, fewer move-ons)?
+""")
+
+with tab3:
+    st.markdown("""
+**What this means for planning & service delivery**
+
+1) **Procurement & contracts**
+   - Use trend windows to negotiate capacity ahead of expected peaks.
+   - Shift mix away from **nightly-paid** where possible; target **longer-term, lower-unit-cost** supply.
+
+2) **Prevention targeting**
+   - Focus upstream on cohorts most at risk (e.g., **families with arrears** or **Section 21 notices**).
+   - Partner with advice services to **triage earlier** and reduce flow into TA.
+
+3) **Move-on pipeline**
+   - Track time-in-TA and unblock **move-on pathways** (PRS incentives, supported housing throughput).
+   - Align lettings, voids, and landlord engagement to reduce **average TA duration**.
+
+4) **Operational resilience**
+   - Plan **staffing and budget** around periods with historically higher demand.
+   - Use quarterly indicators as **early warnings** for finance and cabinet reports.
+
+> The dashboard gives managers a quick read on *where pressure is coming from* and *which levers to pull* next.
+""")
+
+with tab4:
+    st.markdown("""
+**Where AI/LLMs can help right now**
+
+1) **Demand Forecasting (next 3–12 months)**
+   - Train a lightweight model on historic TA counts by quarter + macro signals (evictions, rent inflation, UC changes).
+   - Output: **scenario forecasts** with confidence bands for finance planning and procurement.
+
+2) **Smart Placement & Matching**
+   - Use rules + ML to **match households to properties** (distance to school/work, accessibility, cost ceiling).
+   - Prioritise options that **reduce churn** and **minimise nightly-paid usage**.
+
+3) **Automated Narrative Summaries**
+   - Generate **plain-English summaries** each quarter for cabinet packs:
+     > “TA rose by X% this quarter, driven by Y type; projected spend variance £Z. Recommended actions: …”
+   - Cuts manual drafting time and ensures **consistent, evidence-based messaging**.
+
+4) **Early-Warning Signals**
+   - Classify inbound **letters/emails** (e.g., Section 21, arrears) and triage to prevention teams.
+   - Set alerts when risk indicators breach thresholds (e.g., **spike in B&B usage**).
+
+**Implementation notes**
+- Start with **secure, in-house data**; no PII to external services without DPIA.
+- Use small, practical models (Prophet/XGBoost) + **LLMs for summarisation**.
+- Keep an auditable trail: **data → features → forecast → decision**.
 """)
